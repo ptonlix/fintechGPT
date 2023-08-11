@@ -3,6 +3,7 @@
 # import os
 # import nltk
 import argparse
+import config
 #from models.loader.args import parser
 # import models.shared as shared
 # from models.loader import LoaderCheckPoint
@@ -74,30 +75,17 @@ REPLY_WITH_SOURCE = True
 
 if __name__ == "__main__":
 
+    # 获取配置文件路径
     parser = argparse.ArgumentParser(prog='langchain-ChatGLM',
-                                 description='About langchain-ChatGLM, local knowledge based ChatGLM with langchain ｜ '
-                                             '基于本地知识库的 ChatGLM 问答')
+                                 description=' ChatGLM金融挑战赛Demo ')
 
-    parser.add_argument('--no-remote-model', action='store_true', help='remote in the model on '
-                                                                    'loader checkpoint, '
-                                                                    'if your load local '
-                                                                    'model to add the ` '
-                                                                    '--no-remote-model`')
-    parser.add_argument('--model-name', type=str, default=LLM_MODEL, help='Name of the model to load by default.')
-    parser.add_argument('--lora', type=str, help='Name of the LoRA to apply to the model by default.')
-    parser.add_argument("--lora-dir", type=str, default=LORA_DIR, help="Path to directory with all the loras")
-    parser.add_argument('--use-ptuning-v2',action='store_true',help="whether use ptuning-v2 checkpoint")
-    parser.add_argument("--ptuning-dir",type=str,default=PTUNING_DIR,help="the dir of ptuning-v2 checkpoint")
-    # Accelerate/transformers
-    parser.add_argument('--load-in-8bit', action='store_true', default=LOAD_IN_8BIT,
-                        help='Load the model with 8-bit precision.')
-    parser.add_argument('--bf16', action='store_true', default=BF16,
-                        help='Load the model with bfloat16 precision. Requires NVIDIA Ampere GPU.')
-
-    args = parser.parse_args([])
-    args = None
+    parser.add_argument('--config', default='../conf/fintechgpt.yaml', help='project config path')
+ 
     args = parser.parse_args()
     args_dict = vars(args)
     print(args_dict)
+    # 读取配置文件
+    conf = config.Config(args_dict.get('config'))
+    print(conf.get_llm_model())
     #shared.loaderCheckPoint = LoaderCheckPoint(args_dict)
     # main()
