@@ -1,0 +1,9 @@
+model:
+  embedding: GanymedeNil/text2vec-large-chinese #可以是大模型的路径
+  llm:
+    name: chatglm-6b
+    pretrained_model_name: THUDM/chatglm-6b
+    local_model_path: null
+    provides: ChatGLMLLMChain
+
+
