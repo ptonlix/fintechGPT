@@ -5,5 +5,16 @@ model:
     pretrained_model_name: THUDM/chatglm-6b
     local_model_path: null
     provides: ChatGLMLLMChain
+    no_remote_model: False
+    lora: ''
+    lora_dir: ''
+    use_ptuning_v2: False
+    ptuning_dir: 'ptuning-v2'
+    load_in_8bit: False
+    bf16: False
+    api_base_url: 'https://api.openai.com/v1',
+    api_key: ''
+
+
 
 
