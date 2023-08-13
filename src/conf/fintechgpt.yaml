@@ -1,5 +1,14 @@
 model:
-  embedding: GanymedeNil/text2vec-large-chinese #可以是大模型的路径
+  embedding: 
+    name: GanymedeNil/text2vec-large-chinese #可以是大模型的路径
+    top_k: 5 #知识库检索时返回的匹配内容条数
+    chunk_conent: True
+    chunk_size: 250 # 匹配后单段上下文长度
+    chunk_conentscore_threshold: 500 #知识检索内容相关度 Score, 数值范围约为0-1100，如果为0，则不生效，建议设置为500左右，经测试设置为小于500时，匹配结果更精准
+    sentence_size: 100 #文本分句长度
+    vector_search_top_k: 5
+
+
   llm:
     name: chatglm-6b
     pretrained_model_name: THUDM/chatglm-6b
@@ -15,6 +24,8 @@ model:
     api_base_url: 'https://api.openai.com/v1',
     api_key: ''
 
-
+data:
+  question: ../../data/test_questions_top10.jsonl
+  vsdir: ../../data/
 
 

@@ -18,9 +18,12 @@ class Config:
 
     def get_llm_model(self):
         return self.config.get('model').get('llm', {})
+
+    def get_data_conf(self):
+        return self.config.get('data', {})
     
     def validate_config(self):
-        required_keys = ['model']
+        required_keys = ['model', 'data']
         for key in required_keys:
             if key not in self.config:
                 raise ValueError(f"Missing required key in config: {key}")

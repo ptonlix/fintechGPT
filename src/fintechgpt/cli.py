@@ -1,5 +1,5 @@
-# from configs.model_config import *
-# from chains.local_doc_qa import LocalDocQA
+
+from chains.local_doc_qa import LocalDocQA
 # import os
 # import nltk
 import argparse
@@ -86,6 +86,22 @@ if __name__ == "__main__":
     # 读取配置文件
     conf = config.Config(args_dict.get('config'))
     # 加载大模型
-    shared.loaderLLM(LoaderCheckPoint(conf.get_llm_model(), conf.get_llm_model()))
+    llm_model_in = shared.loaderLLM(LoaderCheckPoint(conf.get_llm_model(), conf.get_llm_model()))
 
-    main()      
+    # 加载QA
+    local_doc_qa = LocalDocQA(llm_model_in, conf.get_embedding_model())
+
+    # 根据问题定位到具体的VS库
+    dataconf = conf.get_data_conf()
+    qlist = open(dataconf['question'], 'r').readlines()
+
+    for question in qlist:
+        subdir = '/'
+        if question['company'] and question['date']:
+            subdir += question['company'] + '/' + question['date'][:4]
+            for resp, history in local_doc_qa.get_knowledge_based_answer(query=question['question'], vs_path=subdir, streaming=config.STREAMING):
+                
+        else:
+            
+
+

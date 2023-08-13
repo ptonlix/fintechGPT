@@ -1,23 +1,25 @@
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-from vectorstores import MyFAISS
-from langchain.document_loaders import UnstructuredFileLoader, TextLoader, CSVLoader
-from configs.model_config import *
 import datetime
-from textsplitter import ChineseTextSplitter
-from typing import List
-from utils import torch_gc
-from tqdm import tqdm
-from pypinyin import lazy_pinyin
-from models.base import (BaseAnswer,
-                         AnswerResult)
-from models.loader.args import parser
-from models.loader import LoaderCheckPoint
-import models.shared as shared
-from agent import bing_search
-from langchain.docstore.document import Document
+import os
 from functools import lru_cache
-from textsplitter.zh_title_enhance import zh_title_enhance
+from typing import List
+
+import models.shared as shared
+from config.config import *
+from config.const import *
 from langchain.chains.base import Chain
+from langchain.docstore.document import Document
+from langchain.document_loaders import (CSVLoader, TextLoader,
+                                        UnstructuredFileLoader)
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from logger import logger
+from models.base import AnswerResult, BaseAnswer
+from models.loader import LoaderCheckPoint
+from models.loader.args import parser
+from pypinyin import lazy_pinyin
+from textsplitter import ChineseTextSplitter
+from tqdm import tqdm
+from utils import torch_gc
+from vectorstores import MyFAISS
 
 
 # patch HuggingFaceEmbeddings to make it hashable
@@ -57,7 +59,7 @@ def tree(filepath, ignore_dir_names=None, ignore_file_names=None):
     return ret_list, [os.path.basename(p) for p in ret_list]
 
 
-def load_file(filepath, sentence_size=SENTENCE_SIZE, using_zh_title_enhance=ZH_TITLE_ENHANCE):
+def load_file(filepath, sentence_size=100):
 
     if filepath.lower().endswith(".md"):
         loader = UnstructuredFileLoader(filepath, mode="elements")
@@ -85,8 +87,6 @@ def load_file(filepath, sentence_size=SENTENCE_SIZE, using_zh_title_enhance=ZH_T
         loader = UnstructuredFileLoader(filepath, mode="elements")
         textsplitter = ChineseTextSplitter(pdf=False, sentence_size=sentence_size)
         docs = loader.load_and_split(text_splitter=textsplitter)
-    if using_zh_title_enhance:
-        docs = zh_title_enhance(docs)
     write_check_file(filepath, docs)
     return docs
 
@@ -126,26 +126,30 @@ def search_result2docs(search_results):
 class LocalDocQA:
     llm_model_chain: Chain = None
     embeddings: object = None
-    top_k: int = VECTOR_SEARCH_TOP_K
-    chunk_size: int = CHUNK_SIZE
+    top_k: int = 5 # VECTOR_SEARCH_TOP_K
+    chunk_size: int = 250
     chunk_conent: bool = True
-    score_threshold: int = VECTOR_SEARCH_SCORE_THRESHOLD
+    score_threshold: int = 500
 
-    def init_cfg(self,
-                 embedding_model: str = EMBEDDING_MODEL,
-                 embedding_device=EMBEDDING_DEVICE,
-                 llm_model: Chain = None,
-                 top_k=VECTOR_SEARCH_TOP_K,
-                 ):
+    def __init__(self, llm_model: Chain = None, params: dict= {}) -> None:
+        """
+        参数初始化
+        """
         self.llm_model_chain = llm_model
-        self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_dict[embedding_model],
-                                                model_kwargs={'device': embedding_device})
-        self.top_k = top_k
+        self.embeddings = HuggingFaceEmbeddings(model_name=params.get('name', ''), # 获取云端或者本地的embeddings
+                                                model_kwargs={'device': "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"})
+        self.top_k = params.get('top_k', 5)
+        self.chunk_conent = params.get('chunk_conent', True)
+        self.chunk_size = params.get('chunk_size', 250)
+        self.score_threshold = params.get('score_threshold', 500)
+        self.sentence_size = params.get('sentence_size', 100)
+        self.vector_search_top_k = params.get('vector_search_top_k', 5)
+
+
 
     def init_knowledge_vector_store(self,
                                     filepath: str or List[str],
-                                    vs_path: str or os.PathLike = None,
-                                    sentence_size=SENTENCE_SIZE):
+                                    vs_path: str or os.PathLike = None):
         loaded_files = []
         failed_files = []
         if isinstance(filepath, str):
@@ -155,7 +159,7 @@ class LocalDocQA:
             elif os.path.isfile(filepath):
                 file = os.path.split(filepath)[-1]
                 try:
-                    docs = load_file(filepath, sentence_size)
+                    docs = load_file(filepath, self.sentence_size)
                     logger.info(f"{file} 已成功加载")
                     loaded_files.append(filepath)
                 except Exception as e:
@@ -166,7 +170,7 @@ class LocalDocQA:
                 docs = []
                 for fullfilepath, file in tqdm(zip(*tree(filepath, ignore_dir_names=['tmp_files'])), desc="加载文件"):
                     try:
-                        docs += load_file(fullfilepath, sentence_size)
+                        docs += load_file(fullfilepath, self.sentence_size)
                         loaded_files.append(fullfilepath)
                     except Exception as e:
                         logger.error(e)
@@ -195,7 +199,7 @@ class LocalDocQA:
                 torch_gc()
             else:
                 if not vs_path:
-                    vs_path = os.path.join(KB_ROOT_PATH,
+                    vs_path = os.path.join(VS_ROOT_PATH,
                                            f"""{"".join(lazy_pinyin(os.path.splitext(file)[0]))}_FAISS_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}""",
                                            "vector_store")
                 vector_store = MyFAISS.from_documents(docs, self.embeddings)  # docs 为Document列表
@@ -259,15 +263,13 @@ class LocalDocQA:
     # score_threshold    搜索匹配score阈值
     # vector_search_top_k   搜索知识库内容条数，默认搜索5条结果
     # chunk_sizes    匹配单段内容的连接上下文长度
-    def get_knowledge_based_conent_test(self, query, vs_path, chunk_conent,
-                                        score_threshold=VECTOR_SEARCH_SCORE_THRESHOLD,
-                                        vector_search_top_k=VECTOR_SEARCH_TOP_K, chunk_size=CHUNK_SIZE):
+    def get_knowledge_based_conent_test(self, query, vs_path):
         vector_store = load_vector_store(vs_path, self.embeddings)
         # FAISS.similarity_search_with_score_by_vector = similarity_search_with_score_by_vector
-        vector_store.chunk_conent = chunk_conent
-        vector_store.score_threshold = score_threshold
-        vector_store.chunk_size = chunk_size
-        related_docs_with_score = vector_store.similarity_search_with_score(query, k=vector_search_top_k)
+        vector_store.chunk_conent = self.chunk_conent
+        vector_store.score_threshold = self.score_threshold
+        vector_store.chunk_size = self.chunk_size
+        related_docs_with_score = vector_store.similarity_search_with_score(query, k=self.vector_search_top_k)
         if not related_docs_with_score:
             response = {"query": query,
                         "source_documents": []}
@@ -278,22 +280,22 @@ class LocalDocQA:
                     "source_documents": related_docs_with_score}
         return response, prompt
 
-    def get_search_result_based_answer(self, query, chat_history=[], streaming: bool = STREAMING):
-        results = bing_search(query)
-        result_docs = search_result2docs(results)
-        prompt = generate_prompt(result_docs, query)
+    # def get_search_result_based_answer(self, query, chat_history=[], streaming: bool = STREAMING):
+    #     results = bing_search(query)
+    #     result_docs = search_result2docs(results)
+    #     prompt = generate_prompt(result_docs, query)
 
-        answer_result_stream_result = self.llm_model_chain(
-            {"prompt": prompt, "history": chat_history, "streaming": streaming})
+    #     answer_result_stream_result = self.llm_model_chain(
+    #         {"prompt": prompt, "history": chat_history, "streaming": streaming})
 
-        for answer_result in answer_result_stream_result['answer_result_stream']:
-            resp = answer_result.llm_output["answer"]
-            history = answer_result.history
-            history[-1][0] = query
-            response = {"query": query,
-                        "result": resp,
-                        "source_documents": result_docs}
-            yield response, history
+    #     for answer_result in answer_result_stream_result['answer_result_stream']:
+    #         resp = answer_result.llm_output["answer"]
+    #         history = answer_result.history
+    #         history[-1][0] = query
+    #         response = {"query": query,
+    #                     "result": resp,
+    #                     "source_documents": result_docs}
+    #         yield response, history
 
     def delete_file_from_vector_store(self,
                                       filepath: str or List[str],
@@ -327,27 +329,5 @@ if __name__ == "__main__":
     args = parser.parse_args(args=['--model-dir', '/media/checkpoint/', '--model', 'chatglm-6b', '--no-remote-model'])
 
     args_dict = vars(args)
-    shared.loaderCheckPoint = LoaderCheckPoint(args_dict)
-    llm_model_ins = shared.loaderLLM()
-
-    local_doc_qa = LocalDocQA()
-    local_doc_qa.init_cfg(llm_model=llm_model_ins)
-    query = "本项目使用的embedding模型是什么，消耗多少显存"
-    vs_path = "/media/gpt4-pdf-chatbot-langchain/dev-langchain-ChatGLM/vector_store/test"
-    last_print_len = 0
-    # for resp, history in local_doc_qa.get_knowledge_based_answer(query=query,
-    #                                                              vs_path=vs_path,
-    #                                                              chat_history=[],
-    #                                                              streaming=True):
-    for resp, history in local_doc_qa.get_search_result_based_answer(query=query,
-                                                                     chat_history=[],
-                                                                     streaming=True):
-        print(resp["result"][last_print_len:], end="", flush=True)
-        last_print_len = len(resp["result"])
-    source_text = [f"""出处 [{inum + 1}] {doc.metadata['source'] if doc.metadata['source'].startswith("http")
-    else os.path.split(doc.metadata['source'])[-1]}：\n\n{doc.page_content}\n\n"""
-                   # f"""相关度：{doc.metadata['score']}\n\n"""
-                   for inum, doc in
-                   enumerate(resp["source_documents"])]
-    logger.info("\n\n" + "\n\n".join(source_text))
+   
     pass
