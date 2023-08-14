@@ -105,6 +105,7 @@ if __name__ == "__main__":
         #    for resp, history in local_doc_qa.get_knowledge_based_answer(query=question['question'], vs_path=subdir, streaming=config.STREAMING):
         #         answer = {'id': question['id'], 'question': question['question'], 'answer': resp['result']}
         #         print(answer) 
+            answer = {'id': question['id'], 'question': question['question'], 'answer': ''}
             print('no company and date')
 
 

@@ -14,7 +14,6 @@ from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from logger import logger
 from models.base import AnswerResult, BaseAnswer
 from models.loader import LoaderCheckPoint
-from models.loader.args import parser
 from pypinyin import lazy_pinyin
 from textsplitter import ChineseTextSplitter
 from tqdm import tqdm
