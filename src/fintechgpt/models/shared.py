@@ -1,8 +1,6 @@
 import sys
 from typing import Any
-from models.loader.args import parser
 from models.loader import LoaderCheckPoint
-from configs.model_config import (llm_model_dict, LLM_MODEL)
 from models.base import BaseAnswer
 
 

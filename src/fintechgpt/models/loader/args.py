@@ -1,7 +1,6 @@
 
 import argparse
 import os
-from configs.model_config import *
 
 
 # Additional argparse types

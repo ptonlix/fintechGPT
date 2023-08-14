@@ -152,6 +152,7 @@ class BaseAnswer(ABC):
     """上层业务包装器.用于结果生成统一api调用"""
 
     @property
+    
     @abstractmethod
     def _check_point(self) -> LoaderCheckPoint:
         """Return _check_point of llm."""
