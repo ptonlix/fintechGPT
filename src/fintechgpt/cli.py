@@ -94,14 +94,17 @@ if __name__ == "__main__":
     # 根据问题定位到具体的VS库
     dataconf = conf.get_data_conf()
     qlist = open(dataconf['question'], 'r').readlines()
-
     for question in qlist:
         subdir = '/'
         if question['company'] and question['date']:
             subdir += question['company'] + '/' + question['date'][:4]
             for resp, history in local_doc_qa.get_knowledge_based_answer(query=question['question'], vs_path=subdir, streaming=config.STREAMING):
-                
+                answer = {'id': question['id'], 'question': question['question'], 'answer': resp['result']}
+                print(answer)
         else:
-            
+        #    for resp, history in local_doc_qa.get_knowledge_based_answer(query=question['question'], vs_path=subdir, streaming=config.STREAMING):
+        #         answer = {'id': question['id'], 'question': question['question'], 'answer': resp['result']}
+        #         print(answer) 
+            print('no company and date')
 
 
